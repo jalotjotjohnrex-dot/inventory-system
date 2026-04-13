@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Package, ArrowUpRight, TrendingUp, ClipboardList, AlertTriangle, Box } from 'lucide-react'
 
 export default function OfficeDashboard() {
+  const navigate = useNavigate()
   const [transactions, setTransactions] = useState([])
-  const [items, setItems] = useState([])
 
   const [stats, setStats] = useState({
     totalSystemItems: 0,
@@ -28,20 +29,14 @@ export default function OfficeDashboard() {
       .then(res => res.json())
       .then(data => setTransactions(data))
       .catch(err => console.error(err))
-
-    // 3. Fetch local active items baseline (server-side filtered)
-    fetch(`/api/items/available?office=${encodeURIComponent(userOffice)}`)
-      .then(res => res.json())
-      .then(data => setItems(data))
-      .catch(err => console.error(err))
   }, [userOffice])
 
   const SUMMARY_CARDS = [
-    { title: 'Total System Items', value: stats.totalSystemItems, icon: Package, color: 'indigo', desc: `Total ${userOffice} stock` },
-    { title: 'Total Transactions', value: stats.totalTransactions, icon: ClipboardList, color: 'slate', desc: 'Department logbook' },
-    { title: 'Stocked (Available)', value: stats.stockedAvailable, icon: TrendingUp, color: 'emerald', desc: `Currently inside ${userOffice}` },
-    { title: 'Total Borrowed', value: stats.totalBorrowed, icon: ArrowUpRight, color: 'indigo_light', desc: 'Deployed temporary loans' },
-    { title: 'Total Defective', value: stats.totalDefective, icon: AlertTriangle, color: 'rose', desc: 'Broken or maintenance' },
+    { title: 'Total System Items', value: stats.totalSystemItems, icon: Package, color: 'indigo', desc: `Total ${userOffice} stock`, path: '/office/items' },
+    { title: 'Total Transactions', value: stats.totalTransactions, icon: ClipboardList, color: 'slate', desc: 'Department logbook', path: '/office/transactions' },
+    { title: 'Stocked (Available)', value: stats.stockedAvailable, icon: TrendingUp, color: 'emerald', desc: `Currently inside ${userOffice}`, path: '/office/items' },
+    { title: 'Total Borrowed', value: stats.totalBorrowed, icon: ArrowUpRight, color: 'indigo_light', desc: 'Items borrowed from other offices', path: '/office/borrowed' },
+    { title: 'Total Defective', value: stats.totalDefective, icon: AlertTriangle, color: 'rose', desc: 'Broken or maintenance', path: '/office/defective' },
   ]
 
   return (
@@ -68,7 +63,11 @@ export default function OfficeDashboard() {
           }[card.color]
 
           return (
-            <div key={card.title} className="bg-white rounded-2xl p-6 border border-slate-200/60 shadow-[0_2px_20px_-8px_rgba(0,0,0,0.05)] relative overflow-hidden group hover:border-slate-300 transition-colors">
+            <div 
+              key={card.title} 
+              onClick={() => navigate(card.path)}
+              className="bg-white rounded-2xl p-6 border border-slate-200/60 shadow-[0_2px_20px_-8px_rgba(0,0,0,0.05)] relative overflow-hidden group hover:border-indigo-300 hover:shadow-xl hover:shadow-indigo-500/5 transition-all duration-300 cursor-pointer"
+            >
               <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${colorStyles} rounded-bl-[100px] -z-0 opacity-50 group-hover:scale-110 transition-transform duration-500`}></div>
 
               <div className="relative z-10 flex justify-between items-start mb-4">
@@ -87,9 +86,9 @@ export default function OfficeDashboard() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 h-[500px]">
+      <div className="grid grid-cols-1 gap-6 h-[500px]">
         {/* Recent Transactions Preview */}
-        <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-200/60 shadow-[0_2px_20px_-8px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
+        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-[0_2px_20px_-8px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
           <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-white text-slate-900 z-10 relative">
             <div>
               <h3 className="text-lg font-bold tracking-tight">Recent Transactions</h3>
@@ -103,7 +102,7 @@ export default function OfficeDashboard() {
                 <p className="text-sm font-bold text-slate-500">No recent transactions traced.</p>
               </div>
             ) : (
-              transactions.slice(0, 6).map((t, index) => {
+              transactions.slice(0, 10).map((t, index) => {
                 const isExternalBorrower = t.borrowed_by === userOffice;
                 return (
                   <div key={index} className="flex items-center gap-4 p-4 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer group">
@@ -126,37 +125,6 @@ export default function OfficeDashboard() {
                   </div>
                 );
               })
-            )}
-          </div>
-        </div>
-
-        {/* Condition State Overview Preview */}
-        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-[0_2px_20px_-8px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden relative">
-          <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-sky-400 to-indigo-500"></div>
-          <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="text-base font-bold tracking-tight text-slate-900">Assigned Hardware State</h3>
-          </div>
-          <div className="flex-1 overflow-y-auto p-2">
-            {items.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center p-8 text-center text-slate-400">
-                <Package className="w-10 h-10 mb-3 opacity-20" />
-                <p className="text-sm font-bold text-slate-500">No physical hardware assigned.</p>
-              </div>
-            ) : (
-              items.map((item, index) => (
-                <div key={index} className="flex items-center justify-between p-4 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer group border-b border-slate-50 last:border-0">
-                  <div className="flex-1">
-                    <h4 className="text-sm font-bold text-slate-900">{item.product_name}</h4>
-                    <p className="text-xs font-medium text-slate-500 capitalize">{item.product_type} • S/N: {item.serial_number}</p>
-                  </div>
-                  <div className="text-right flex items-center gap-3">
-                    <span className="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-xs border border-slate-200">Qty: {item.quantity}</span>
-                    <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded border shadow-sm ${item.quality === 'New' || item.quality === 'Good Condition' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
-                      {item.quality}
-                    </span>
-                  </div>
-                </div>
-              ))
             )}
           </div>
         </div>

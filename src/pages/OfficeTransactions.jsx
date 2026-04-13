@@ -12,12 +12,13 @@ export default function OfficeTransactions() {
   const [recentTxIds, setRecentTxIds] = useState([])
   const [editingTxId, setEditingTxId] = useState(null)
   const [offices, setOffices] = useState([])
+  const [searchQuery, setSearchQuery] = useState('')
   
   const userOffice = localStorage.getItem('userOffice') || 'Unknown Office'
 
   const [formData, setFormData] = useState({
     product_name: '', product_type: '', product_model: '', serial_number: '', property_number: '',
-    office_id: '', received_by: '', borrowed_by: '', transaction_date: '', quality: 'New', quantity: 1
+    office_id: '', received_by: '', borrowed_by: '', transaction_date: '', quality: 'New'
   })
 
   const fetchTransactions = () => {
@@ -50,7 +51,7 @@ export default function OfficeTransactions() {
   const handleCancel = () => {
     setShowAddForm(false)
     setEditingTxId(null)
-    setFormData({ product_name: '', product_type: '', product_model: '', serial_number: '', property_number: '', office_id: '', received_by: '', borrowed_by: '', transaction_date: '', quality: 'New', quantity: 1 })
+    setFormData({ product_name: '', product_type: '', product_model: '', serial_number: '', property_number: '', office_id: '', received_by: '', borrowed_by: '', transaction_date: '', quality: 'New' })
   }
 
   const handleEdit = (t) => {
@@ -79,7 +80,7 @@ export default function OfficeTransactions() {
         office_id: isExternalBorrower ? t.office_name : (isStrictlyBorrowed ? t.borrowed_by || '' : ''),
         received_by: t.received_by === '-' ? '' : (t.received_by || ''), 
         borrowed_by: t.borrowed_by === '-' ? '' : (t.borrowed_by || ''), 
-        transaction_date: formattedDate, quality: t.quality || 'New', quantity: t.quantity || 1
+        transaction_date: formattedDate, quality: t.quality || 'New', quantity: 1
       });
       
       setEditingTxId(t.transaction_id);
@@ -129,7 +130,7 @@ export default function OfficeTransactions() {
 
   const handleReturn = async (transactionId) => {
     const isConfirmed = await confirm({
-      title: 'Return Physical Asset',
+      title: 'Return Items',
       message: 'Are you sure you want to verify the return of this asset? This will update the inventory possession records.',
       confirmText: 'Verify & Return',
       type: 'info'
@@ -209,10 +210,6 @@ export default function OfficeTransactions() {
               <input type="text" name="property_number" value={formData.property_number} onChange={handleChange} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none" placeholder="PN-XXXX" />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700">Quantity *</label>
-              <input required type="number" min="1" name="quantity" value={formData.quantity} onChange={handleChange} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none" />
-            </div>
-            <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-700">Borrowed From Office *</label>
               <div className="relative">
                 <select required name="office_id" value={formData.office_id} onChange={handleChange} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none text-slate-700 appearance-none">
@@ -262,7 +259,13 @@ export default function OfficeTransactions() {
         <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="relative group w-full sm:w-auto">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 group-focus-within:text-indigo-600 transition-colors" />
-            <input type="text" placeholder="Search my assets..." className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none w-full sm:w-72" />
+            <input 
+              type="text" 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search name, serial, or borrower..." 
+              className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none w-full sm:w-72" 
+            />
           </div>
           <button className="flex items-center gap-2 text-sm font-semibold text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-4 py-2 rounded-lg transition-colors">
             <Filter className="w-4 h-4" /> Filter Views
@@ -288,15 +291,19 @@ export default function OfficeTransactions() {
                 <tr>
                   <th className="px-6 py-4 rounded-tl-xl text-indigo-600">Item Identity</th>
                 <th className="px-6 py-4">S/N & Property No.</th>
-                <th className="px-6 py-4 text-center">Qty</th>
                   <th className="px-6 py-4">Receiver / Borrower</th>
-                  <th className="px-6 py-4">Assigned Time</th>
+                  <th className="px-6 py-4">Assigned Date</th>
                   <th className="px-6 py-4">State</th>
                   <th className="px-6 py-4 text-right rounded-tr-xl">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {transactions.map((t) => {
+                {transactions.filter(t => {
+                    const search = searchQuery.toLowerCase();
+                    return (t.product_name && t.product_name.toLowerCase().includes(search)) ||
+                           (t.serial_number && t.serial_number.toLowerCase().includes(search)) ||
+                           (t.borrowed_by && t.borrowed_by.toLowerCase().includes(search));
+                 }).map((t) => {
                   const rawBorrower = t.borrowed_by || '';
                   const isReturned = rawBorrower.includes('(Returned)') || rawBorrower === '- Returned -';
                   const isStrictlyBorrowed = rawBorrower !== null && rawBorrower !== '-' && rawBorrower !== '' && !isReturned;
@@ -324,7 +331,6 @@ export default function OfficeTransactions() {
                     <p className="font-mono text-xs font-medium text-slate-600">{t.serial_number}</p>
                     <p className="font-mono text-[10px] font-bold text-indigo-500/70 mt-1">{t.property_number || 'N/A'}</p>
                   </td>
-    <td className="px-6 py-4 text-center font-bold text-slate-700">{t.quantity || 1}</td>
                       <td className="px-6 py-4">
                         <p className="text-xs font-bold text-slate-800"><span className="text-slate-400 font-medium">Rec:</span> {t.received_by || '-'}</p>
                         <p className={`text-xs font-bold ${isStrictlyBorrowed ? 'text-amber-600' : isReturned ? 'text-emerald-600' : 'text-slate-800'}`}>

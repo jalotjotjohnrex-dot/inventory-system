@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Package, Building2, LogOut, Database, Users } from 'lucide-react'
+import { LayoutDashboard, Package, Building2, LogOut, Database, Users, ArrowRightLeft } from 'lucide-react'
 
 export default function Sidebar() {
   const location = useLocation()
@@ -11,6 +11,7 @@ export default function Sidebar() {
   const links = [
     { name: 'Dashboard', path: baseUrl, icon: LayoutDashboard },
     { name: 'Inventory Base', path: `${baseUrl}/transactions`, icon: Database },
+    { name: 'Total Borrowed Items', path: `${baseUrl}/borrowed`, icon: ArrowRightLeft },
     { name: 'Items', path: `${baseUrl}/items`, icon: Package },
     { name: 'Defective Items', path: `${baseUrl}/defective`, icon: Package },
     ...(isAdmin ? [{ name: 'Suppliers', path: '/admin/suppliers', icon: Building2 }] : []),

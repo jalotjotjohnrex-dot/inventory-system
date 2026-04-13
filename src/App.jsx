@@ -6,10 +6,12 @@ import AdminItems from './pages/AdminItems'
 import AdminSuppliers from './pages/AdminSuppliers'
 import AdminOffices from './pages/AdminOffices'
 import AdminDefectiveItems from './pages/AdminDefectiveItems'
+import AdminBorrowed from './pages/AdminBorrowed'
 import OfficeDashboard from './pages/OfficeDashboard'
 import OfficeTransactions from './pages/OfficeTransactions'
 import OfficeItems from './pages/OfficeItems'
 import OfficeDefectiveItems from './pages/OfficeDefectiveItems'
+import OfficeBorrowed from './pages/OfficeBorrowed'
 import Layout from './components/Layout'
 import { ToastProvider } from './context/ToastContext'
 import { ConfirmProvider } from './context/ConfirmContext'
@@ -35,12 +37,14 @@ function App() {
                 <Route path="admin/suppliers" element={<AdminSuppliers />} />
                 <Route path="admin/offices" element={<AdminOffices />} />
                 <Route path="admin/defective" element={<AdminDefectiveItems />} />
+                <Route path="admin/borrowed" element={<AdminBorrowed />} />
 
                 {/* Individual Office Route */}
                 <Route path="office" element={<OfficeDashboard />} />
                 <Route path="office/transactions" element={<OfficeTransactions />} />
                 <Route path="office/items" element={<OfficeItems />} />
                 <Route path="office/defective" element={<OfficeDefectiveItems />} />
+                <Route path="office/borrowed" element={<OfficeBorrowed />} />
               </Route>
             </Routes>
           </Router>

@@ -9,10 +9,11 @@ export default function AdminTransactions() {
   const [loading, setLoading] = useState(true)
   const [recentTxIds, setRecentTxIds] = useState([])
   const [editingTxId, setEditingTxId] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
   
   const [formData, setFormData] = useState({
     product_name: '', product_type: '', product_model: '', serial_number: '', property_number: '',
-    office_id: '', received_by: '', borrowed_by: '', transaction_date: '', quality: 'New', quantity: 1
+    office_id: '', received_by: '', borrowed_by: '', transaction_date: '', quality: 'New'
   })
 
   const fetchTransactions = () => {
@@ -35,7 +36,7 @@ export default function AdminTransactions() {
   const handleCancel = () => {
     setShowAddForm(false)
     setEditingTxId(null)
-    setFormData({ product_name: '', product_type: '', product_model: '', serial_number: '', property_number: '', office_id: '', received_by: '', borrowed_by: '', transaction_date: '', quality: 'New', quantity: 1 })
+    setFormData({ product_name: '', product_type: '', product_model: '', serial_number: '', property_number: '', office_id: '', received_by: '', borrowed_by: '', transaction_date: '', quality: 'New' })
   }
 
   const handleEdit = (t) => {
@@ -57,7 +58,7 @@ export default function AdminTransactions() {
       office_id: t.office_name || t.office_id || '', 
       received_by: t.received_by === '-' ? '' : (t.received_by || ''), 
       borrowed_by: t.borrowed_by === '-' ? '' : (t.borrowed_by || ''), 
-      transaction_date: formattedDate, quality: t.quality || 'New', quantity: t.quantity || 1
+      transaction_date: formattedDate, quality: t.quality || 'New'
     });
     setEditingTxId(t.transaction_id);
     setShowAddForm(true);
@@ -73,7 +74,7 @@ export default function AdminTransactions() {
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({ ...formData, quantity: 1 })
       })
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
@@ -140,10 +141,6 @@ export default function AdminTransactions() {
               <input type="text" name="property_number" value={formData.property_number} onChange={handleChange} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none" placeholder="PN-XXXX" />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700">Quantity *</label>
-              <input required type="number" min="1" name="quantity" value={formData.quantity} onChange={handleChange} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none" />
-            </div>
-            <div className="space-y-1">
               <label className="text-xs font-semibold text-slate-700">Assigned Office *</label>
               <div className="relative">
                 <select required name="office_id" value={formData.office_id} onChange={handleChange} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none text-slate-700 appearance-none">
@@ -203,7 +200,13 @@ export default function AdminTransactions() {
         <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
            <div className="relative group w-full sm:w-auto">
              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 group-focus-within:text-indigo-600 transition-colors" />
-             <input type="text" placeholder="Search S/N, Name, Office..." className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none w-full sm:w-72" />
+             <input 
+               type="text" 
+               value={searchQuery}
+               onChange={(e) => setSearchQuery(e.target.value)}
+               placeholder="Search S/N, Name, Office..." 
+               className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all outline-none w-full sm:w-72" 
+             />
            </div>
            <button className="flex items-center gap-2 text-sm font-semibold text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-4 py-2 rounded-lg transition-colors">
              <Filter className="w-4 h-4" /> Filter Views
@@ -216,7 +219,6 @@ export default function AdminTransactions() {
               <tr>
                 <th className="px-6 py-4 rounded-tl-xl text-indigo-600 font-bold">Item Info</th>
                 <th className="px-6 py-4">S/N & Property No.</th>
-                <th className="px-6 py-4 text-center">Qty</th>
                 <th className="px-6 py-4">Office</th>
                 <th className="px-6 py-4">Received / Borrowed</th>
                 <th className="px-6 py-4">Date</th>
@@ -224,7 +226,13 @@ export default function AdminTransactions() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {transactions.map((t) => (
+              {transactions.filter(t => {
+                 const search = searchQuery.toLowerCase();
+                 return (t.product_name && t.product_name.toLowerCase().includes(search)) ||
+                        (t.serial_number && t.serial_number.toLowerCase().includes(search)) ||
+                        (t.office_name && t.office_name.toLowerCase().includes(search)) ||
+                        (t.borrowed_by && t.borrowed_by.toLowerCase().includes(search));
+              }).map((t) => (
                 <tr key={t.transaction_id} className="hover:bg-indigo-50/30 transition-colors group">
                   <td className="px-6 py-4">
                     <p className="font-bold text-slate-900 group-hover:text-indigo-700">{t.product_name}</p>
@@ -234,7 +242,6 @@ export default function AdminTransactions() {
                     <p className="font-mono text-xs font-medium text-slate-600">{t.serial_number}</p>
                     <p className="font-mono text-[10px] font-bold text-indigo-500/70 mt-1">{t.property_number || 'N/A'}</p>
                   </td>
-                  <td className="px-6 py-4 font-bold text-center text-slate-700">{t.quantity || 1}</td>
                   <td className="px-6 py-4 font-semibold text-slate-800">{t.office_name || t.office_id}</td>
                   <td className="px-6 py-4">
                     <p className="text-xs font-medium text-slate-700"><span className="text-slate-400">Rec:</span> {t.received_by || '-'}</p>

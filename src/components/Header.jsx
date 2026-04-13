@@ -14,24 +14,29 @@ export default function Header() {
     if (path.includes('/admin/offices')) return 'Manage Offices'
     if (path.includes('/transactions')) return 'Transactions'
     if (path.includes('/settings')) return 'System Settings'
-    if (path.includes('/items')) return 'Available Items'
+    if (path.includes('/items')) return userRole === 'admin' ? 'Available Items Overview' : 'Active Hardware'
     if (path.includes('/admin')) return 'System Dashboard'
     return 'Office Dashboard'
   }
 
   const getPageSubtitle = () => {
-    if (location.pathname.includes('/admin')) return 'Real-time insight across all departments'
+    const path = location.pathname
+    if (path.includes('/items')) return userRole === 'admin' ? 'System-wide available non-borrowed assets' : 'Review the live condition and status of assigned material'
+    if (path.includes('/admin')) return 'Real-time insight across all departments'
     return 'Your department inventory metrics'
   }
 
   const { notifications, unreadCount, markAllAsRead } = useNotifications()
   const [showNotif, setShowNotif] = useState(false)
 
+  const title = getPageTitle()
+  const subtitle = getPageSubtitle()
+
   return (
     <header className="h-24 px-8 flex items-center justify-between z-10 w-full bg-transparent mt-2">
       <div className="flex flex-col animate-slide-up">
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{getPageTitle()}</h1>
-        <p className="text-sm text-slate-500 font-medium mt-0.5">{getPageSubtitle()}</p>
+        {title && <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{title}</h1>}
+        {subtitle && <p className="text-sm text-slate-500 font-medium mt-0.5">{subtitle}</p>}
       </div>
       
       <div className="flex items-center gap-5 relative">

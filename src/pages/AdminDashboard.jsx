@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Users, Package, ArrowUpRight, TrendingUp, MoreHorizontal, ArrowRight, ClipboardList, AlertTriangle } from 'lucide-react'
 
 export default function AdminDashboard() {
+  const navigate = useNavigate()
   const [stats, setStats] = useState({
     totalSystemItems: 0,
     totalTransactions: 0,
@@ -11,7 +13,6 @@ export default function AdminDashboard() {
   })
 
   const [transactions, setTransactions] = useState([])
-  const [officeStats, setOfficeStats] = useState([])
 
   useEffect(() => {
     // 1. Fetch Global Summary Stats
@@ -26,23 +27,15 @@ export default function AdminDashboard() {
       .then(data => setTransactions(data))
       .catch(err => console.error(err))
 
-    // 3. Fetch Office Distribution
-    fetch('/api/offices/stats')
-      .then(res => res.json())
-      .then(data => {
-        // Sort descending by highest inventory count
-        const sorted = data.sort((a,b) => b.total_items - a.total_items)
-        setOfficeStats(sorted)
-      })
-      .catch(err => console.error(err))
+
   }, [])
 
   const SUMMARY_CARDS = [
-    { title: 'Total System Items', value: stats.totalSystemItems, icon: Package, color: 'indigo', desc: 'Across all offices' },
-    { title: 'Total Transactions', value: stats.totalTransactions, icon: ClipboardList, color: 'slate', desc: 'Recorded movements' },
-    { title: 'Stocked (Available)', value: stats.stockedAvailable, icon: TrendingUp, color: 'emerald', desc: 'Currently in offices' },
-    { title: 'Total Borrowed', value: stats.totalBorrowed, icon: 'IndigoIcon', color: 'indigo_light', desc: 'Out of office' },
-    { title: 'Total Defective', value: stats.totalDefective, icon: AlertTriangle, color: 'rose', desc: 'Broken or maintenance' },
+    { title: 'Total System Items', value: stats.totalSystemItems, icon: Package, color: 'indigo', desc: 'Across all offices', path: '/admin/items' },
+    { title: 'Total Transactions', value: stats.totalTransactions, icon: ClipboardList, color: 'slate', desc: 'Recorded movements', path: '/admin/transactions' },
+    { title: 'Stocked (Available)', value: stats.stockedAvailable, icon: TrendingUp, color: 'emerald', desc: 'Currently in offices', path: '/admin/items' },
+    { title: 'Total Borrowed', value: stats.totalBorrowed, icon: 'IndigoIcon', color: 'indigo_light', desc: 'Out of office', path: '/admin/borrowed' },
+    { title: 'Total Defective', value: stats.totalDefective, icon: AlertTriangle, color: 'rose', desc: 'Broken or maintenance', path: '/admin/defective' },
   ]
   return (
     <div className="space-y-6">
@@ -68,7 +61,11 @@ export default function AdminDashboard() {
           }[card.color]
 
           return (
-            <div key={card.title} className="bg-white rounded-2xl p-6 border border-slate-200/60 shadow-[0_2px_20px_-8px_rgba(0,0,0,0.05)] relative overflow-hidden group hover:border-slate-300 transition-colors">
+            <div 
+              key={card.title} 
+              onClick={() => navigate(card.path)}
+              className="bg-white rounded-2xl p-6 border border-slate-200/60 shadow-[0_2px_20px_-8px_rgba(0,0,0,0.05)] relative overflow-hidden group hover:border-indigo-300 hover:shadow-xl hover:shadow-indigo-500/5 transition-all duration-300 cursor-pointer"
+            >
               <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${colorStyles} rounded-bl-[100px] -z-0 opacity-50 group-hover:scale-110 transition-transform duration-500`}></div>
               
               <div className="relative z-10 flex justify-between items-start mb-4">
@@ -87,9 +84,9 @@ export default function AdminDashboard() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 h-[500px]">
+      <div className="h-[500px]">
         {/* Recent Transactions Preview */}
-        <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-200/60 shadow-[0_2px_20px_-8px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
+        <div className="h-full bg-white rounded-2xl border border-slate-200/60 shadow-[0_2px_20px_-8px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden">
           <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-white text-slate-900 z-10 relative">
             <div>
               <h3 className="text-lg font-bold tracking-tight">Recent Transactions</h3>
@@ -103,7 +100,7 @@ export default function AdminDashboard() {
                   <p className="text-sm font-bold text-slate-500">No global transactions traced.</p>
                </div>
              ) : (
-                transactions.slice(0, 6).map((t, index) => (
+                transactions.slice(0, 15).map((t, index) => (
                    <div key={index} className="flex items-center gap-4 p-4 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer group">
                      <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
                        <Package className="w-5 h-5" />
@@ -131,43 +128,6 @@ export default function AdminDashboard() {
                    </div>
                 ))
              )}
-          </div>
-        </div>
-
-        {/* Top Offices Preview */}
-        <div className="bg-white rounded-2xl border border-slate-200/60 shadow-[0_2px_20px_-8px_rgba(0,0,0,0.05)] flex flex-col overflow-hidden relative">
-          <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-sky-400 to-indigo-500"></div>
-          <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="text-base font-bold tracking-tight text-slate-900">Office Item Status</h3>
-          </div>
-          <div className="flex-1 overflow-y-auto p-2">
-            {officeStats.length === 0 ? (
-                 <div className="h-full flex flex-col items-center justify-center p-8 text-center text-slate-400">
-                    <Users className="w-10 h-10 mb-3 opacity-20" />
-                    <p className="text-sm font-bold text-slate-500">No active offices populated.</p>
-                 </div>
-            ) : (
-              officeStats.slice(0, 8).map((office, i) => (
-                <div key={i} className="flex items-center justify-between p-4 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer group border-b border-slate-50 last:border-0">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs uppercase tracking-wider shadow-sm">
-                      {office.office_name.substring(0, 2)}
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                        {office.office_name}
-                      </h4>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Internal Network</p>
-                    </div>
-                  </div>
-                  <div className="text-right flex items-center gap-2">
-                    <span className="font-bold text-slate-700 bg-slate-100 px-3 py-1 rounded border border-slate-200 shadow-inner text-xs">
-                       {office.total_items} items
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
           </div>
         </div>
       </div>

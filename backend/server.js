@@ -86,79 +86,101 @@ app.post('/api/login', async (req, res) => {
 // Unified Statistics Endpoint
 app.get(['/api/stats', '/api/stats/:officeName'], async (req, res) => {
   try {
-    const officeName = getOfficeName(req);
-    
-    if (officeName) {
-      // Resolve Office Name to ID early for transactions
-      const [[office]] = await pool.query('SELECT office_id FROM offices WHERE LOWER(TRIM(office_name)) = LOWER(?)', [officeName]);
-      if (!office) {
-        return res.status(404).json({ error: `Office "${officeName}" not found` });
+      const parsedOfficeName = getOfficeName(req);
+      let officeId = null;
+      let activeOfficeName = null;
+
+      if (parsedOfficeName) {
+         activeOfficeName = parsedOfficeName;
+         const [[office]] = await pool.query('SELECT office_id FROM offices WHERE LOWER(TRIM(office_name)) = LOWER(?)', [activeOfficeName]);
+         if (!office) {
+            return res.status(404).json({ error: `Office "${activeOfficeName}" not found` });
+         }
+         officeId = office.office_id;
       }
-      const officeId = office.office_id;
 
-      // Total Office Items (From products table)
-      const [[{ totalItems }]] = await pool.query('SELECT SUM(quantity) as totalItems FROM products WHERE office_id = ?', [officeId]);
-      
-      // Total Office Transactions (Both as Owner and Borrower)
-      const [[{ totalTransactions }]] = await pool.query(`
-        SELECT COUNT(*) as totalTransactions FROM transactions 
-        WHERE office_id = ? 
-           OR LOWER(TRIM(borrowed_by)) = LOWER(?)
-           OR LOWER(TRIM(borrowed_by)) = LOWER(CONCAT(?, ' (Returned)'))
-      `, [officeId, officeName, officeName]);
+      // 1. Get Base Products (All owned by this scope)
+      let productsQuery = 'SELECT office_id, quantity, serial_number FROM products';
+      let productsParams = [];
+      if (officeId) {
+         productsQuery += ' WHERE office_id = ?';
+         productsParams = [officeId];
+      }
+      const [products] = await pool.query(productsQuery, productsParams);
 
-      // Total Borrowed (Exclude all forms of returned)
-      const [[{ borrowedItems }]] = await pool.query(`
-        SELECT SUM(quantity) as borrowedItems 
-        FROM transactions 
-        WHERE office_id = ? AND borrowed_by IS NOT NULL AND borrowed_by != '' AND borrowed_by != '-' 
-          AND borrowed_by != '- Returned -' AND borrowed_by NOT LIKE '%(Returned)%'
-      `, [officeId]);
+      // 2. Get All Transactions Ordered By Latest First
+      const [transactions] = await pool.query('SELECT office_id, borrowed_by, serial_number, quality, quantity FROM transactions ORDER BY transaction_id DESC');
 
-      // Total Defective
-      const [[{ defectiveItems }]] = await pool.query(`
-        SELECT SUM(quantity) as defectiveItems
-        FROM transactions
-        WHERE office_id = ? AND quality = 'Defective'
-      `, [officeId]);
+      let computedTotalItems = 0;
+      let lentItems = 0;
+      let defectiveItems = 0;
+      let borrowedFromOthers = 0;
 
-      const actualTotalItems = (totalItems || 0) - (defectiveItems || 0);
-      const availableItems = actualTotalItems - (borrowedItems || 0);
+      // Map to quickly check if a serial is owned by the filtered scope
+      const scopeSerials = new Set();
+      products.forEach(p => {
+         computedTotalItems += parseInt(p.quantity, 10) || 0; 
+         scopeSerials.add(p.serial_number);
+      });
+
+      // To evaluate latest state ONLY
+      const seenSerials = new Set();
+
+      for (const tx of transactions) {
+         if (!seenSerials.has(tx.serial_number)) {
+            seenSerials.add(tx.serial_number);
+
+            const isScopeOwner = officeId ? tx.office_id === officeId : true;
+            const borrower = tx.borrowed_by;
+            const isActiveBorrow = borrower && borrower !== '-' && borrower !== '' && borrower !== '- Returned -' && !borrower.includes('(Returned)');
+            const isDefective = tx.quality === 'Defective';
+            
+            const txQty = parseInt(tx.quantity, 10) || 0;
+
+            // Check if this office is the one borrowing the item (from anyone)
+            if (activeOfficeName && isActiveBorrow && borrower.toLowerCase().trim() === activeOfficeName.toLowerCase().trim()) {
+               borrowedFromOthers += txQty;
+            }
+
+            // If the item is OWNED by the filtered scope
+            if (isScopeOwner && scopeSerials.has(tx.serial_number)) {
+               if (isDefective) {
+                  defectiveItems += txQty;
+               } else if (isActiveBorrow) {
+                  lentItems += txQty;
+               }
+            }
+         }
+      }
+
+      // 156. Calculate metrics:
+      // totalSystemItems: The complete inventory count (Inclusive of Defective)
+      // stockedAvailable: (Owned base total) - Defective (from owned base) - Lent out (from owned base)
+      const stockedAvailable = computedTotalItems - lentItems - defectiveItems;
+
+      // Get accurate transaction count for dashboard
+      let totalTransactions = transactions.length;
+      if (activeOfficeName) {
+         const [[{ count }]] = await pool.query(`
+           SELECT COUNT(*) as count FROM view_all_inventory 
+           WHERE LOWER(TRIM(office_name)) = LOWER(?) 
+              OR LOWER(TRIM(borrowed_by)) = LOWER(?)
+              OR LOWER(TRIM(borrowed_by)) = LOWER(CONCAT(?, ' (Returned)'))
+         `, [activeOfficeName, activeOfficeName, activeOfficeName]);
+         totalTransactions = count;
+      }
+
+      // If global (no officeName), the total borrowed in the entire system is precisely all lent items
+      const finalBorrowedStat = activeOfficeName ? borrowedFromOthers : lentItems;
 
       return res.json({
-        totalSystemItems: actualTotalItems < 0 ? 0 : actualTotalItems,
-        totalTransactions: totalTransactions || 0,
-        stockedAvailable: availableItems < 0 ? 0 : availableItems,
-        totalBorrowed: borrowedItems || 0,
-        totalDefective: defectiveItems || 0
+        totalSystemItems: computedTotalItems < 0 ? 0 : computedTotalItems,
+        totalTransactions: totalTransactions,
+        stockedAvailable: stockedAvailable < 0 ? 0 : stockedAvailable,
+        totalBorrowed: finalBorrowedStat < 0 ? 0 : finalBorrowedStat,
+        totalDefective: defectiveItems < 0 ? 0 : defectiveItems
       });
-    } else {
-      // GLOBAL STATS
-      const [[{ totalItems }]] = await pool.query('SELECT SUM(quantity) as totalItems FROM products');
-      const [[{ totalTransactions }]] = await pool.query('SELECT COUNT(*) as totalTransactions FROM transactions');
-      const [[{ borrowedItems }]] = await pool.query(`
-        SELECT SUM(quantity) as borrowedItems 
-        FROM transactions 
-        WHERE borrowed_by IS NOT NULL AND borrowed_by != '' AND borrowed_by != '-' 
-          AND borrowed_by NOT LIKE '%(Returned)%' AND borrowed_by != '- Returned -'
-      `);
-      const [[{ defectiveItems }]] = await pool.query(`
-        SELECT SUM(quantity) as defectiveItems
-        FROM transactions
-        WHERE quality = 'Defective'
-      `);
 
-      const actualTotalItems = (totalItems || 0) - (defectiveItems || 0);
-      const availableItems = actualTotalItems - (borrowedItems || 0);
-
-      return res.json({
-        totalSystemItems: actualTotalItems < 0 ? 0 : actualTotalItems,
-        totalTransactions: totalTransactions || 0,
-        stockedAvailable: availableItems < 0 ? 0 : availableItems,
-        totalBorrowed: borrowedItems || 0,
-        totalDefective: defectiveItems || 0
-      });
-    }
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to aggregate statistics' });
@@ -413,40 +435,23 @@ app.get(['/api/items/available', '/api/items/available/:officeName'], async (req
       `);
     }
 
-    const [defects] = await pool.query(`
-      SELECT serial_number, SUM(quantity) as defective_qty, quality
-      FROM transactions
-      WHERE quality = 'Defective' OR quality = 'Maintenance'
-      GROUP BY serial_number, quality
-    `);
+    // Get all transactions ordered newest first to find latest state
+    const [transactions] = await pool.query('SELECT serial_number, quality FROM transactions ORDER BY transaction_id DESC');
+    
+    // Map serial numbers to their absolute latest recorded quality state
+    const latestQuality = new Map();
+    transactions.forEach(tx => {
+       if (!latestQuality.has(tx.serial_number)) {
+          latestQuality.set(tx.serial_number, tx.quality);
+       }
+    });
 
-    const finalItems = [];
-
-    products.forEach(p => {
-      const matchingDefects = defects.filter(d => d.serial_number === p.serial_number);
-      let healthyQty = p.quantity;
-
-      // Slice out defective/maintenance amounts into their own visual rows
-      matchingDefects.forEach(d => {
-         const defQty = parseInt(d.defective_qty) || 0;
-         if (defQty > 0) {
-            healthyQty -= defQty;
-            finalItems.push({
-               ...p,
-               quantity: defQty,
-               quality: d.quality // Spawns a 'Defective' row dynamically
-            });
-         }
-      });
-
-      // Spawn remaining items as Healthy block
-      if (healthyQty > 0) {
-         finalItems.push({
-            ...p,
-            quantity: healthyQty,
-            quality: 'New' // Baseline healthy state
-         });
-      }
+    const finalItems = products.map(p => {
+       const currentState = latestQuality.get(p.serial_number) || 'New';
+       return {
+          ...p,
+          quality: currentState // Override with specific point-in-time logged quality
+       };
     });
 
     res.json(finalItems);
@@ -473,6 +478,11 @@ app.post('/api/items', async (req, res) => {
     const [[office]] = await connection.query('SELECT office_id FROM offices WHERE office_name = ?', [office_id]);
     if (!office) {
        throw new Error(`Office '${office_id}' not found in system.`);
+    }
+
+    // 2. Strict Serial Uniqueness Check
+    if (serial_number && parseInt(quantity) > 1) {
+       return res.status(400).json({ error: "Validation Error: Items with a Serial Number must have a quantity of 1. Each unique asset requires its own registration." });
     }
 
     // 2. Insert ONLY into products database with full tracking details
